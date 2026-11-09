@@ -216,15 +216,43 @@ return {
     -- TOP-LEVEL SINGLE KEY MAPPINGS
     -- ============================================================================
 
+    require("neotex.util.workspace").setup()
+
+    vim.api.nvim_create_user_command("Cheatsheet", function()
+      require("neotex.util.cheatsheet").open()
+    end, { desc = "Show shortcut cheatsheet" })
+
     wk.add({
       { "<leader>b", "<cmd>lua CloseOtherBuffers()<CR>", desc = "close other buffers", icon = "󰅚" },
       { "<leader>c", "<cmd>vert sb<CR>", desc = "create split", icon = "󰯌" },
+      { "<leader>C", "<cmd>sb<CR>", desc = "create horizontal split", icon = "󰯌" },
+      -- Resize the current split (works without the Alt key)
+      { "<leader>]", "<cmd>vertical resize +5<CR>", desc = "wider split", icon = "󰩨" },
+      { "<leader>[", "<cmd>vertical resize -5<CR>", desc = "narrower split", icon = "󰩨" },
+      { "<leader>+", "<cmd>resize +3<CR>", desc = "taller split", icon = "󰩨" },
+      { "<leader>-", "<cmd>resize -3<CR>", desc = "shorter split", icon = "󰩨" },
+      { "<leader>=", "<C-w>=", desc = "equalize splits", icon = "󰩨" },
+      { "<leader>o", "<cmd>ToggleTerm<CR>", desc = "open/hide terminal", icon = "" },
       { "<leader>d", "<cmd>lua if vim.fn.filereadable(vim.fn.expand('%')) == 1 then vim.cmd('update!') end; smart_bufdelete()<CR>", desc = "delete buffer", icon = "󰩺" },
       { "<leader>e", "<cmd>Neotree toggle<CR>", desc = "explorer", icon = "󰙅" },
       { "<leader>k", "<cmd>close<CR>", desc = "kill split", icon = "󰆴" },
       { "<leader>q", "<cmd>wa! | qa!<CR>", desc = "quit", icon = "󰗼" },
       { "<leader>u", "<cmd>Telescope undo<CR>", desc = "undo", icon = "󰕌" },
       { "<leader>w", "<cmd>wa!<CR>", desc = "write", icon = "󰆓" },
+      { "<leader>?", function() require("neotex.util.cheatsheet").open() end, desc = "cheatsheet", icon = "󰋗" },
+      { "<leader>hs", "<cmd>Cheatsheet<CR>", desc = "cheatsheet", icon = "󰋗" },
+      -- Tab pages (tmux-style windows): each tab page holds its own layout of splits
+      { "<leader>N", "<cmd>tabnew<CR>", desc = "new tab page", icon = "󰝜" },
+      { "<leader>X", "<cmd>tabclose<CR>", desc = "close tab page", icon = "󰅖" },
+      { "<leader>1", "<cmd>silent! 1tabnext<CR>", desc = "tab page 1", icon = "󰎤" },
+      { "<leader>2", "<cmd>silent! 2tabnext<CR>", desc = "tab page 2", icon = "󰎤" },
+      { "<leader>3", "<cmd>silent! 3tabnext<CR>", desc = "tab page 3", icon = "󰎤" },
+      { "<leader>4", "<cmd>silent! 4tabnext<CR>", desc = "tab page 4", icon = "󰎤" },
+      { "<leader>5", "<cmd>silent! 5tabnext<CR>", desc = "tab page 5", icon = "󰎤" },
+      { "<leader>6", "<cmd>silent! 6tabnext<CR>", desc = "tab page 6", icon = "󰎤" },
+      { "<leader>7", "<cmd>silent! 7tabnext<CR>", desc = "tab page 7", icon = "󰎤" },
+      { "<leader>8", "<cmd>silent! 8tabnext<CR>", desc = "tab page 8", icon = "󰎤" },
+      { "<leader>9", "<cmd>silent! 9tabnext<CR>", desc = "tab page 9", icon = "󰎤" },
     })
 
     -- CloseOtherBuffers: Close all listed buffers except the current one

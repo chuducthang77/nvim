@@ -114,7 +114,7 @@ return {
         always_show_bufferline = false, -- Only show when more than one buffer
         diagnostics = false, -- Disable diagnostics integration initially
         diagnostics_update_in_insert = false,
-        show_tab_indicators = false,
+        show_tab_indicators = true,
         show_close_icon = false,
         -- Handle clicks from winfixbuf windows (e.g., Claude terminal sidebar)
         left_mouse_command = function(bufnr)
@@ -223,7 +223,7 @@ return {
           end,
           diagnostics = false,
           diagnostics_update_in_insert = false,
-          show_tab_indicators = false,
+          show_tab_indicators = true,
           show_close_icon = false,
           sort_by = function(buffer_a, buffer_b)
             -- add custom logic

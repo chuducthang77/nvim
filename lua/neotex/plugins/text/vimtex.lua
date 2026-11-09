@@ -2,10 +2,16 @@ return {
   "lervag/vimtex",
   init = function()
     -- Viewer settings
-    vim.g.vimtex_view_method = 'sioyek'            -- Sioyek PDF viewer for academic documents
+    vim.g.vimtex_view_method = 'skim'            -- Sioyek PDF viewer for academic documents
     -- Note: Not setting vimtex_view_sioyek_options allows VimTeX to handle window management
     -- It will open new windows when needed but reuse for the same document
-    vim.g.vimtex_context_pdf_viewer = 'okular'     -- External PDF viewer for the Vimtex menu
+    -- Jump to the current source position after a successful compilation
+    vim.g.vimtex_view_skim_sync = 1
+
+    -- Give Skim focus when :VimtexView is invoked
+    vim.g.vimtex_view_skim_activate = 0
+
+    vim.g.vimtex_context_pdf_viewer = 'skim'     -- External PDF viewer for the Vimtex menu
 
     -- Formatting settings
     -- vim.g.vimtex_format_enabled = true             -- Enable formatting with latexindent

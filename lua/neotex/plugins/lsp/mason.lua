@@ -1,6 +1,6 @@
 return {
   {
-    "williamboman/mason.nvim",
+    "mason-org/mason.nvim",
     cmd = "Mason", -- Only load when the Mason command is run
     event = "VeryLazy", -- Load after startup is complete
     dependencies = {},
@@ -18,9 +18,12 @@ return {
     end
   },
   {
-    "williamboman/mason-lspconfig.nvim",
+    "mason-org/mason-lspconfig.nvim",
     event = "VeryLazy", -- Load after startup is complete
-    dependencies = { "mason.nvim" },
+    dependencies = {
+      "mason-org/mason.nvim",
+      "neovim/nvim-lspconfig",
+    },
     config = function()
       require("mason-lspconfig").setup({
         -- Only list essential servers to install via mason
@@ -28,14 +31,14 @@ return {
           "pyright",
         },
         -- Only install on-demand when needed
-        automatic_installation = false,
+        automatic_enable = false,
       })
     end
   },
   {
     "WhoIsSethDaniel/mason-tool-installer.nvim",
     event = "VeryLazy",
-    dependencies = { "mason.nvim" },
+    dependencies = { "mason-org/mason.nvim" },
     config = function() 
       require("mason-tool-installer").setup({
         ensure_installed = {

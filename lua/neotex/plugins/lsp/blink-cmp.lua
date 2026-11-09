@@ -298,6 +298,11 @@ return {
       cmdline = {
         enabled = true,
         completion = {
+          -- Don't preselect/insert the first match, so `:w<CR>` runs `:w`
+          -- instead of expanding to the top suggestion (e.g. `while`)
+          list = {
+            selection = { preselect = false, auto_insert = false },
+          },
           menu = {
             auto_show = true
           },

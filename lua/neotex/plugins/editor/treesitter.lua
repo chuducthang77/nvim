@@ -2,15 +2,21 @@ return {
   {
     "nvim-treesitter/nvim-treesitter",
     branch = "main",
-    event = { "BufReadPost", "BufNewFile" },
+    lazy = false,
     build = ":TSUpdate",
     config = function()
+      local treesitter = require("nvim-treesitter")
+
+      treesitter.setup({
+        install_dir = vim.fn.stdpath("data") .. "/site",
+      })
       -- Parsers to auto-install
       local parsers = {
         "lua", "vim", "vimdoc", "query", "markdown", "markdown_inline",
         "python", "bash", "nix", "json", "yaml", "toml", "gitignore",
         "c", "haskell", "css", "html", "javascript", "scss", "regex",
         "typst", "astro", "typescript", "tsx",
+        "latex", "norg", "svelte", "vue",
       }
 
       -- Filetypes to disable treesitter for
@@ -24,9 +30,20 @@ return {
         callback = function(args)
           local ft = vim.bo[args.buf].filetype
 
+          -- NEOTEX_TEX_SYNTAX_FIX
+          -- VimTeX math-zone detection reads legacy tex syntax groups.
+          if ft == "tex" or ft == "plaintex" then
+            pcall(vim.treesitter.stop, args.buf)
+            vim.bo[args.buf].syntax = "tex"
+            return
+          end
+
           -- Skip disabled filetypes
           if disabled_filetypes[ft] then
-            vim.opt_local.syntax = "on"
+            pcall(vim.treesitter.stop, args.buf)
+            vim.api.nvim_buf_call(args.buf, function ()
+              vim.bo.syntax = "ON"
+            end)
             return
           end
 
@@ -45,17 +62,8 @@ return {
       vim.opt.foldexpr = "v:lua.vim.treesitter.foldexpr()"
       vim.opt.foldlevel = 99
 
-      -- Auto-install parsers
-      vim.defer_fn(function()
-        for _, lang in ipairs(parsers) do
-          local ok = pcall(vim.treesitter.language.inspect, lang)
-          if not ok then
-            pcall(function()
-              vim.cmd("TSInstall! " .. lang)
-            end)
-          end
-        end
-      end, 100)
+      -- This is asynchronous and a no-op for parsers already installed.
+      treesitter.install(parsers)
     end,
   },
 

@@ -187,6 +187,15 @@ return {
     },
   },
   config = function(_, opts)
+    -- NEOTEX_TEX_FILETYPE_FIX
+    -- This higher-priority rule prevents Snacks.bigfile from claiming
+    -- LaTeX files before VimTeX and the TeX ftplugins are initialized.
+    vim.filetype.add({
+      pattern = {
+        [".*%.tex"] = { "tex", { priority = math.huge } },
+      },
+    })
+
     local snacks = require("snacks")
     snacks.setup(opts)
     -- Set vim.ui.input to use Snacks.input

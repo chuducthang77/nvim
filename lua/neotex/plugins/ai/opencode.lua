@@ -21,7 +21,9 @@ return {
     vim.g.opencode_opts = {
       events = {
         enabled = true,
-        reload = true,
+        reload = {
+          enabled = true,
+        },
         permissions = {
           enabled = false, -- Disable permission UI to prevent prompts
         },

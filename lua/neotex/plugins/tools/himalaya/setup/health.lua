@@ -316,7 +316,7 @@ function M.checks.folder_mappings()
 end
 
 -- Run all health checks
-function M.check()
+local function collect_health()
   local checks = {
     {name = 'Binaries', test = M.checks.binaries},
     {name = 'Maildir Structure', test = M.checks.maildir},
@@ -393,9 +393,47 @@ function M.check()
   }
 end
 
+local function format_issue(issue)
+  if type(issue) ~= 'table' then
+    return tostring(issue)
+  end
+
+  local message = issue.issue or vim.inspect(issue)
+  if issue.file then
+    message = message .. ' (' .. issue.file .. ')'
+  end
+  return message
+end
+
+-- Entry point used by :checkhealth.
+function M.check()
+  local result = collect_health()
+  vim.health.start('Himalaya')
+
+  for _, check in ipairs(result.report) do
+    local advice = check.fix and { check.fix } or nil
+
+    if check.ok then
+      vim.health.ok(check.name)
+    elseif check.issues and #check.issues > 0 then
+      for _, issue in ipairs(check.issues) do
+        vim.health.error(check.name .. ': ' .. format_issue(issue), advice)
+      end
+    else
+      vim.health.error(check.name, advice)
+    end
+
+    for _, detail in ipairs(check.details or {}) do
+      vim.health.info(check.name .. ': ' .. tostring(detail))
+    end
+  end
+
+  return result
+end
+
 -- Display health check results
 function M.show_report(silent)
-  local result = M.check()
+  local result = collect_health()
   local float = require('neotex.plugins.tools.himalaya.ui.float')
   
   -- Build output lines

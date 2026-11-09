@@ -16,38 +16,180 @@ local REFRESH_RETRY_COOLDOWN = 60 -- 1 minute
 -- Cache for account auth types (avoid re-reading config)
 local auth_type_cache = {}
 
--- Load environment variables (NixOS systemd support)
-function M.load_environment()
-  local env_vars = {}
+-- macOS Keychain support (managed by neotex-himalaya-keychain-fix.py)
+local function trim(value)
+  if type(value) ~= 'string' then
+    return nil
+  end
+  value = vim.trim(value)
+  return value ~= '' and value or nil
+end
 
-  -- Try systemd environment first
-  local handle = io.popen('systemctl --user show-environment 2>/dev/null')
-  if handle then
-    local output = handle:read('*a')
-    handle:close()
-
-    for line in output:gmatch('[^\n]+') do
-      local key, value = line:match('^([^=]+)=(.+)$')
-      if key and value then
-        env_vars[key] = value
-      end
+local function append_unique(values, value)
+  if not value or value == '' then
+    return
+  end
+  for _, existing in ipairs(values) do
+    if existing == value then
+      return
     end
   end
+  table.insert(values, value)
+end
 
-  -- Specific OAuth-related variables we need
+local function escape_pattern(value)
+  return (value:gsub('([^%w])', '%%%1'))
+end
+
+-- Read the actual *.keyring values from the account block when possible.
+local function configured_key_names(account)
+  local result = { access = {}, refresh = {}, client_secret = {} }
+  local path = vim.fn.expand('~/.config/himalaya/config.toml')
+  if vim.fn.filereadable(path) ~= 1 then
+    return result
+  end
+
+  local escaped = escape_pattern(account)
+  local headers = {
+    '^%s*%[accounts%.' .. escaped .. '%]%s*$',
+    '^%s*%[accounts%."' .. escaped .. '"%]%s*$',
+    "^%s*%[accounts%.'" .. escaped .. "'%]%s*$",
+  }
+  local in_account = false
+
+  for _, raw_line in ipairs(vim.fn.readfile(path)) do
+    local line = raw_line:gsub('%s+#.*$', '')
+    if line:match('^%s*%[') then
+      if in_account then
+        break
+      end
+      for _, header in ipairs(headers) do
+        if line:match(header) then
+          in_account = true
+          break
+        end
+      end
+    elseif in_account then
+      append_unique(
+        result.access,
+        line:match("auth%.access%-token%.keyring%s*=%s*['\"]([^'\"]+)['\"]")
+      )
+      append_unique(
+        result.refresh,
+        line:match("auth%.refresh%-token%.keyring%s*=%s*['\"]([^'\"]+)['\"]")
+      )
+      append_unique(
+        result.client_secret,
+        line:match("auth%.client%-secret%.keyring%s*=%s*['\"]([^'\"]+)['\"]")
+      )
+    end
+  end
+  return result
+end
+
+local function add_fallbacks(values, account, kind)
+  -- Himalaya's common shared name, plus NeoTeX's split SMTP/IMAP names.
+  append_unique(values, account .. '-oauth2-' .. kind)
+  append_unique(values, account .. '-smtp-oauth2-' .. kind)
+  append_unique(values, account .. '-imap-oauth2-' .. kind)
+
+  -- gmail-imap should normally map to gmail-imap-oauth2-*, not the previous
+  -- accidental gmail-imap-imap-oauth2-* derivation. Keep both for migration.
+  local base = account:gsub('%-imap$', '')
+  if base ~= account then
+    append_unique(values, base .. '-oauth2-' .. kind)
+    append_unique(values, base .. '-imap-oauth2-' .. kind)
+  end
+end
+
+local function key_names(account)
+  local result = configured_key_names(account)
+  add_fallbacks(result.access, account, 'access-token')
+  add_fallbacks(result.refresh, account, 'refresh-token')
+  add_fallbacks(result.client_secret, account, 'client-secret')
+  return result
+end
+
+local function keyring_command(username)
+  if (vim.fn.has('macunix') == 1 or vim.fn.has('mac') == 1)
+      and vim.fn.executable('security') == 1 then
+    -- No -w: check entry existence without reading or printing the secret.
+    return {
+      'security', 'find-generic-password',
+      '-s', 'himalaya-cli',
+      '-a', username,
+    }, true
+  end
+
+  if vim.fn.executable('secret-tool') == 1 then
+    return {
+      'secret-tool', 'lookup',
+      'service', 'himalaya-cli',
+      'username', username,
+    }, false
+  end
+  return nil, false
+end
+
+local function keyring_entry_exists(username)
+  local command, existence_only = keyring_command(username)
+  if not command then
+    return false
+  end
+  local result = vim.system(command, { text = true }):wait()
+  if not result or result.code ~= 0 then
+    return false
+  end
+  return existence_only or trim(result.stdout) ~= nil
+end
+
+local function find_key(usernames)
+  for _, username in ipairs(usernames) do
+    if keyring_entry_exists(username) then
+      return true, username
+    end
+  end
+  return false, nil
+end
+
+-- Load OAuth variables from the process environment first, and retain the
+-- original NixOS/systemd import when systemctl exists.
+function M.load_environment()
+  local env_vars = {}
   local oauth_vars = {
     'GMAIL_CLIENT_ID',
     'GMAIL_CLIENT_SECRET',
     'SASL_PATH',
-    'GOOGLE_APPLICATION_CREDENTIALS'
+    'GOOGLE_APPLICATION_CREDENTIALS',
   }
+
+  for _, var in ipairs(oauth_vars) do
+    local value = vim.env[var]
+    if value and value ~= '' then
+      env_vars[var] = value
+    end
+  end
+
+  if vim.fn.executable('systemctl') == 1 then
+    local result = vim.system(
+      { 'systemctl', '--user', 'show-environment' },
+      { text = true }
+    ):wait()
+    if result and result.code == 0 then
+      for line in (result.stdout or ''):gmatch('[^\n]+') do
+        local key, value = line:match('^([^=]+)=(.*)$')
+        if key and value and value ~= '' and not env_vars[key] then
+          env_vars[key] = value
+        end
+      end
+    end
+  end
 
   for _, var in ipairs(oauth_vars) do
     if env_vars[var] then
       vim.fn.setenv(var, env_vars[var])
     end
   end
-
   return env_vars
 end
 
@@ -130,42 +272,18 @@ end
 -- Check if OAuth token exists
 function M.has_token(account)
   account = account or 'gmail'
-  
-  -- Build the correct token name based on account
-  local token_name = account .. '-smtp-oauth2-access-token'
-  if account:match('-imap$') then
-    -- For IMAP accounts, the pattern is account-imap-oauth2
-    -- e.g., gmail-imap becomes gmail-imap-imap-oauth2-access-token
-    token_name = account .. '-imap-oauth2-access-token'
-  end
-  
-  -- Check using secret-tool (GNOME keyring) with himalaya's specific format
-  local cmd = string.format('secret-tool lookup service himalaya-cli username %s 2>/dev/null | grep -q .', token_name)
-  
-  local result = os.execute(cmd)
-  return result == 0
+  local exists = find_key(key_names(account).access)
+  return exists
 end
 
--- Async version of has_token to avoid blocking
+-- Async-compatible wrapper. The Keychain lookup is a short local operation;
+-- scheduling the callback avoids invoking callers re-entrantly.
 function M.has_token_async(account, callback)
-  account = account or 'gmail'
-  
-  -- Build the correct token name based on account
-  local token_name = account .. '-smtp-oauth2-access-token'
-  if account:match('-imap$') then
-    token_name = account .. '-imap-oauth2-access-token'
-  end
-  
-  -- Check using secret-tool asynchronously
-  local cmd = string.format('secret-tool lookup service himalaya-cli username %s 2>/dev/null | grep -q .', token_name)
-  
-  vim.fn.jobstart(cmd, {
-    on_exit = function(_, code)
-      if callback then
-        callback(code == 0)
-      end
+  vim.schedule(function()
+    if callback then
+      callback(M.has_token(account))
     end
-  })
+  end)
 end
 
 -- Check if OAuth token is valid (not expired)
@@ -406,37 +524,20 @@ end
 -- Get detailed token information
 function M.get_token_info(account)
   account = account or 'gmail'
-  local info = {}
-  
-  -- Determine token suffix based on account type
-  local token_suffix = account:match('-imap$') and '-imap-oauth2' or '-smtp-oauth2'
-  
-  -- Check access token
-  local handle = io.popen(string.format('secret-tool lookup service himalaya-cli username %s%s-access-token 2>/dev/null', account, token_suffix))
-  if handle then
-    local token = handle:read('*a')
-    handle:close()
-    info.has_access_token = token and token ~= ''
-    info.access_token_preview = token and token:sub(1, 10) .. '...' or nil
-  end
-  
-  -- Check refresh token
-  handle = io.popen(string.format('secret-tool lookup service himalaya-cli username %s%s-refresh-token 2>/dev/null', account, token_suffix))
-  if handle then
-    local token = handle:read('*a')
-    handle:close()
-    info.has_refresh_token = token and token ~= ''
-  end
-  
-  -- Check client secret
-  handle = io.popen(string.format('secret-tool lookup service himalaya-cli username %s%s-client-secret 2>/dev/null', account, token_suffix))
-  if handle then
-    local token = handle:read('*a')
-    handle:close()
-    info.has_client_secret = token and token ~= ''
-  end
-  
-  return info
+  local names = key_names(account)
+  local has_access, access_key = find_key(names.access)
+  local has_refresh, refresh_key = find_key(names.refresh)
+  local has_client_secret, client_secret_key = find_key(names.client_secret)
+
+  return {
+    has_access_token = has_access,
+    access_token_preview = nil,
+    access_token_key = access_key,
+    has_refresh_token = has_refresh,
+    refresh_token_key = refresh_key,
+    has_client_secret = has_client_secret,
+    client_secret_key = client_secret_key,
+  }
 end
 
 -- Get OAuth status information
@@ -454,6 +555,8 @@ function M.get_status(account)
   -- Check environment
   local env = M.load_environment()
   status.environment_loaded = env.GMAIL_CLIENT_ID ~= nil
+    or status.has_token
+    or status.token_info.has_client_secret
   
   return status
 end

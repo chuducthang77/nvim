@@ -14,7 +14,7 @@ return {
     config = function()
       -- Set all disabling flags before requiring luasnip
       vim.g.luasnip_no_community_snippets = true
-      vim.g.luasnip_no_jsregexp = true
+      vim.g.luasnip_no_jsregexp = false
       vim.g.luasnip_no_vscode_loader = true
 
       -- Initialize LuaSnip with minimal configuration
@@ -23,6 +23,8 @@ return {
         history = true,
         update_events = "TextChanged,TextChangedI",
         enable_autosnippets = true,
+        region_check_events = "CursorMoved,CursorMovedI",
+        delete_check_events = "TextChanged,TextChangedI",
         -- Store visual selection for use in snippets
         store_selection_keys = "<Tab>",
         -- Exit snippet on unmatched events
@@ -40,12 +42,14 @@ return {
       if ok and loader then
         loader.load({ paths = { vim.fn.stdpath("config") .. "/snippets" } })
       end
+
+      -- Load advanced native Lua snippets (UltiSnips conversion)
+      local ok_lua, lua_loader = pcall(require, "luasnip.loaders.from_lua")
+      if ok_lua and lua_loader then
+        lua_loader.load({ paths = { vim.fn.stdpath("config") .. "/luasnippets" } })
+      end
+
       
-      -- Setup region check events for better snippet interaction
-      ls.config.set_config({
-        region_check_events = "CursorMoved,CursorMovedI",
-        delete_check_events = "TextChanged,TextChangedI",
-      })
 
       -- Let blink.cmp handle Tab navigation primarily
       -- Only set up select mode mapping for when snippet placeholders are selected
